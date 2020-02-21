@@ -1,24 +1,34 @@
+#include <chrono>
+#include <condition_variable>
+#include <future>
 #include <iostream>
 #include <mutex>
-#include <condition_variable>
-#include <thread>
-#include <future>
-#include <vector>
 #include <queue>
-#include <chrono>
+#include <thread>
+#include <vector>
 
 
 class ThreadPool {
 public:
-    // the mutex, condition variable and deque form a single
-    // thread-safe triggered queue of tasks:
-    std::mutex EventMtx;
-    std::condition_variable v;
-    // note that a packaged_task<void> can store a packaged_task<R>:
-    std::deque<std::packaged_task<void()>> work;
+    ThreadPool() = default;
 
-    // this holds futures representing the worker threads being done:
-    std::vector<std::future<void>> finished;
+    ThreadPool(const ThreadPool&) = delete;
+
+    ThreadPool &operator=(const ThreadPool&) = delete;
+
+        // start N threads in the thread pool.
+    void start(std::size_t n = 1){
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            // each thread is a std::async running this->thread_task():
+            finished.push_back(
+                    std::async(
+                            std::launch::async,
+                            [this]{ thread_task(); }
+                    )
+            );
+        }
+    }
 
     // queue( lambda ) will enqueue the lambda into the tasks for the threads
     // to use.  A future of the type the lambda returns is given to let you get
@@ -39,19 +49,6 @@ public:
         return r; // return the future result of the task
     }
 
-    // start N threads in the thread pool.
-    void start(std::size_t n = 1){
-        for (std::size_t i = 0; i < n; ++i)
-        {
-            // each thread is a std::async running this->thread_task():
-            finished.push_back(
-                    std::async(
-                            std::launch::async,
-                            [this]{ thread_task(); }
-                    )
-            );
-        }
-    }
     // abort() cancels all non-started tasks, and tells every working thread
     // stop running, and waits for them to finish up.
     void abort() {
@@ -76,10 +73,21 @@ public:
         v.notify_all();
         finished.clear();
     }
+
     ~ThreadPool() {
         finish();
     }
 private:
+    // the mutex, condition variable and deque form a single
+    // thread-safe triggered queue of tasks:
+    std::mutex EventMtx;
+    std::condition_variable v;
+    // note that a packaged_task<void> can store a packaged_task<R>:
+    std::deque<std::packaged_task<void()>> work;
+
+    // this holds futures representing the worker threads being done:
+    std::vector<std::future<void>> finished;
+
     // the work that a worker thread does:
     void thread_task() {
         while(true){
