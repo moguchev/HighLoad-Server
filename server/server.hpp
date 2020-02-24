@@ -13,12 +13,11 @@
 #include <string>
 #include <unordered_map>
 
-
-
 const auto MAX_DATE_BUFFER_SIZE = 256;
 
-
 namespace HTTP {
+    const auto FORBIDDEN = 403;
+    
     namespace HEADER {
         const auto DATE = "Date";
         const auto SERVER = "Server";
@@ -30,14 +29,14 @@ namespace HTTP {
     const auto DATE_FORMAT = "%a, %d %b %Y %H:%M:%S GMT";
 
     namespace MIME {
-        const auto APPLICATION_OCTET_STREAM = "application/octet-stream";
-        const auto TEXT_HTML = "text/html";
-        const auto TEXT_CSS = "text/css";
-        const auto APPLICATION_JAVASCRIPT = "application/javascript";
-        const auto IMAGE_JPEG = "image/jpeg";
-        const auto IMAGE_PNG = "image/png";
-        const auto IMAGE_GIF = "image/gif";
-        const auto APPLICATION_X_SHOCKWAVE_FLASH = "application/x-shockwave-flash";
+        const std::string APPLICATION_OCTET_STREAM = "application/octet-stream";
+        const std::string TEXT_HTML = "text/html";
+        const std::string TEXT_CSS = "text/css";
+        const std::string APPLICATION_JAVASCRIPT = "application/javascript";
+        const std::string IMAGE_JPEG = "image/jpeg";
+        const std::string IMAGE_PNG = "image/png";
+        const std::string IMAGE_GIF = "image/gif";
+        const std::string APPLICATION_X_SHOCKWAVE_FLASH = "application/x-shockwave-flash";
     } // MIME
 
     namespace EXT {
@@ -52,16 +51,16 @@ namespace HTTP {
     } // EXT
 } // HTTP
 
-const std::unordered_map<std::string, std::string> MIME_MAP {
-    { HTTP::EXT::HTML , HTTP::MIME::TEXT_HTML },
-    { HTTP::EXT::CSS  , HTTP::MIME::TEXT_CSS },
-    { HTTP::EXT::JS   , HTTP::MIME::APPLICATION_JAVASCRIPT },
-    { HTTP::EXT::JPG  , HTTP::MIME::IMAGE_JPEG },
-    { HTTP::EXT::JPEG , HTTP::MIME::IMAGE_JPEG },
-    { HTTP::EXT::PNG  , HTTP::MIME::IMAGE_PNG },
-    { HTTP::EXT::GIF  , HTTP::MIME::IMAGE_GIF },
-    { HTTP::EXT::SWF  , HTTP::MIME::APPLICATION_X_SHOCKWAVE_FLASH },
-};
+// const std::unordered_map<std::string, std::string> MIME_MAP {
+//     { HTTP::EXT::HTML , HTTP::MIME::TEXT_HTML },
+//     { HTTP::EXT::CSS  , HTTP::MIME::TEXT_CSS },
+//     { HTTP::EXT::JS   , HTTP::MIME::APPLICATION_JAVASCRIPT },
+//     { HTTP::EXT::JPG  , HTTP::MIME::IMAGE_JPEG },
+//     { HTTP::EXT::JPEG , HTTP::MIME::IMAGE_JPEG },
+//     { HTTP::EXT::PNG  , HTTP::MIME::IMAGE_PNG },
+//     { HTTP::EXT::GIF  , HTTP::MIME::IMAGE_GIF },
+//     { HTTP::EXT::SWF  , HTTP::MIME::APPLICATION_X_SHOCKWAVE_FLASH },
+// };
 
 class server {
 public:

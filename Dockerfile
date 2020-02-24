@@ -11,7 +11,7 @@ WORKDIR /server
 COPY . /server
 
 COPY ./httpd.conf /etc/httpd.conf
-COPY ./httptest /var/www/html/httptest
+#COPY ./httptest /var/www/html/httptest
 
 RUN cmake CMakeLists.txt
 RUN make

@@ -1,6 +1,6 @@
 #include <string>
 #include <chrono>
-#include <evhttp.h>
+#include <event2/http.h>
 #include <utility>
 #include <boost/filesystem.hpp>
 #include <cstdlib>
@@ -78,7 +78,13 @@ std::pair<int,std::size_t> server::find_source(const std::string& root, const st
     }
     BOOST_LOG_TRIVIAL(debug) << "Full path to file: " << fs_path.c_str();
 
-    int file_fd = open(fs_path.string().c_str(), O_RDONLY);
+    int file_fd = open(fs_path.c_str(), O_RDONLY);
+    BOOST_LOG_TRIVIAL(debug) << "file_fd: " << file_fd;
+    if (file_fd == -1) {
+        return std::make_pair(file_fd, 0);
+    }
+    
+    BOOST_LOG_TRIVIAL(debug) << "file_size: " << fs::file_size(fs_path);
     return std::make_pair(file_fd, fs::file_size(fs_path));
 }
 
@@ -89,13 +95,29 @@ std::string server::get_content_type(const std::string& path) {
     }
     fs::path fs_path(path); 
     const std::string ext = fs_path.filename().extension().c_str();
-    auto it = MIME_MAP.find(ext);
-    if (it == MIME_MAP.end())
+    if (ext == HTTP::EXT::HTML) {
+        return HTTP::MIME::TEXT_HTML;
+    } else if (ext == HTTP::EXT::CSS) {
+        return HTTP::MIME::TEXT_CSS;
+    } else if (ext == HTTP::EXT::JS) {
+        return HTTP::MIME::APPLICATION_JAVASCRIPT;
+    } else if (ext == HTTP::EXT::JPG) {
+        return HTTP::MIME::IMAGE_JPEG;
+    } else if (ext == HTTP::EXT::JPEG) {
+        return HTTP::MIME::IMAGE_JPEG;
+    } else if (ext == HTTP::EXT::PNG) {
+        return HTTP::MIME::IMAGE_PNG;
+    } else if (ext == HTTP::EXT::GIF) {
+        return HTTP::MIME::IMAGE_GIF;
+    } else if (ext == HTTP::EXT::SWF) {
+        return HTTP::MIME::APPLICATION_X_SHOCKWAVE_FLASH;
+    } else {
         return HTTP::MIME::APPLICATION_OCTET_STREAM;
-    return it->second;
+    }
 }
 
 void server::handle_request(evhttp_request *req) {
+    bool is_index = false;
     auto out_headers = evhttp_request_get_output_headers(req);
     add_default_headers(out_headers);
 
@@ -108,27 +130,32 @@ void server::handle_request(evhttp_request *req) {
     // decoded uri
     auto decoded_uri = evhttp_uri_parse(req->uri);
 	if (!decoded_uri) {
-		BOOST_LOG_TRIVIAL(error) << "It's not a good URI. Sending BADREQUEST" ;
+		BOOST_LOG_TRIVIAL(error) << "It's not a good URI: " <<  req->uri;
+        BOOST_LOG_TRIVIAL(debug) << HTTP_BADREQUEST << std::endl;
 		evhttp_send_error(req, HTTP_BADREQUEST, nullptr);
 		return;
 	}
     
     auto path = evhttp_uri_get_path(decoded_uri);
-	if (!path) path = "/";
+	if (!path) {
+        path = "/";
+        is_index = true;
+    };
 
     auto decoded_path = evhttp_uridecode(path, 0, nullptr);
 	if (!decoded_path) {
-        BOOST_LOG_TRIVIAL(error) << "It's not a good path. Sending BADREQUEST" ;
+        BOOST_LOG_TRIVIAL(error) << "It's not a good path:" << path;
+        BOOST_LOG_TRIVIAL(debug) << HTTP_NOTFOUND << std::endl;
         evhttp_send_error(req, HTTP_NOTFOUND, nullptr);
         evhttp_uri_free(decoded_uri);
         return;
+    } else {
+        is_index = (decoded_path[strlen(decoded_path)-1] == '/');
     }
-	/* Don't allow any ".."s in the path, to avoid exposing stuff outside
-	 * of the docroot.  This test is both overzealous and underzealous:
-	 * it forbids aceptable paths like "/this/one..here", but it doesn't
-	 * do anything to prevent symlink following." */
+
 	if (strstr(decoded_path, "..")) {
-        BOOST_LOG_TRIVIAL(error) << "It's not a good path. Sending BADREQUEST" ;
+        BOOST_LOG_TRIVIAL(error) << "It's not a good path: " << decoded_path;
+        BOOST_LOG_TRIVIAL(debug) << HTTP_NOTFOUND << std::endl;
         evhttp_send_error(req, HTTP_NOTFOUND, nullptr);
         evhttp_uri_free(decoded_uri);
         free(decoded_path);
@@ -141,20 +168,31 @@ void server::handle_request(evhttp_request *req) {
     auto result = server::find_source(_document_root, decoded_path);
 
     auto out = evbuffer_new();
+
     if (result.first == -1) {
-	    evhttp_send_error(req, HTTP_NOTFOUND, nullptr);
+        BOOST_LOG_TRIVIAL(debug) << "file not found" << decoded_path;
+        if (is_index) {
+            evhttp_send_error(req, HTTP::FORBIDDEN, nullptr);
+        } else {
+	        evhttp_send_error(req, HTTP_NOTFOUND, nullptr);
+        }
     } else {
         if (req->type == EVHTTP_REQ_GET) {
             evbuffer_add_file(out, result.first, 0, result.second);
         }
         // Add headers
-        evhttp_add_header(out_headers, HTTP::HEADER::CONTENT_TYPE, get_content_type(decoded_path).c_str());
+        auto content_type = get_content_type(decoded_path);
+        BOOST_LOG_TRIVIAL(debug) << "Content-type: " <<  content_type;
+        evhttp_add_header(out_headers, HTTP::HEADER::CONTENT_TYPE, content_type.c_str());
         std::string l;
         std::stringstream ss;
         ss << result.second;
+        auto content_length = ss.str().c_str();
+        BOOST_LOG_TRIVIAL(debug) << "Content-Length: " << content_length;
         evhttp_add_header(out_headers, HTTP::HEADER::CONTENT_LENGTH, ss.str().c_str());
 
-        evhttp_send_reply(req, HTTP_OK, "OK", out);     
+        BOOST_LOG_TRIVIAL(debug) << HTTP_OK << " OK " << decoded_path << std::endl;
+        evhttp_send_reply(req, HTTP_OK, "OK", out);    
     }
     
 	if (decoded_uri)
