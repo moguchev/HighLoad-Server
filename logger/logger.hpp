@@ -7,8 +7,7 @@
 namespace logger {
 
 // init logger
-static void init_log(bool console=false, bool file=false)
-{
+static void init_log(bool console=false, bool file=false) {
     static const std::string COMMON_FMT("[%TimeStamp%][%Severity%]: %Message%");
 
     boost::log::register_simple_formatter_factory< boost::log::trivial::severity_level, char >("Severity");
