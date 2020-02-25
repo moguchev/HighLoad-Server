@@ -22,8 +22,8 @@ namespace HTTP {
         const auto DATE = "Date";
         const auto SERVER = "Server";
         const auto CONNECTION = "Connection";
-        const auto CONTENT_TYPE = "Content-type";
-        const auto CONTENT_LENGTH = "Content-length";
+        const auto CONTENT_TYPE = "Content-Type";
+        const auto CONTENT_LENGTH = "Content-Length";
     } // HEADER
 
     const auto DATE_FORMAT = "%a, %d %b %Y %H:%M:%S GMT";
@@ -88,6 +88,8 @@ public:
     static std::string get_date();
 
     static std::string get_content_type(const std::string& path);
+
+    static bool is_safe_path(const std::string& path);
 
 private:
     std::string _address;

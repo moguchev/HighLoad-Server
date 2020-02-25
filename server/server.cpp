@@ -6,13 +6,12 @@
 #include <cstdlib>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sstream>
 
 #include "server.hpp"
 
 namespace fs = boost::filesystem;
 
-std::string server::_document_root = "";
+std::string server::_document_root = "/var/www/html";
 
 server::server(const std::string& address, std::uint16_t port, 
     std::size_t num_of_threads, const std::string& doc_root)
@@ -116,6 +115,16 @@ std::string server::get_content_type(const std::string& path) {
     }
 }
 
+bool server::is_safe_path(const std::string& path) {
+    auto double_dot = path.find_first_of("..");
+    if (double_dot == std::string::npos)
+        return true;
+    auto last_slash = path.find_last_of('/');
+    if (last_slash < double_dot)
+        return true;
+    return false;
+}
+
 void server::handle_request(evhttp_request *req) {
     bool is_index = false;
     auto out_headers = evhttp_request_get_output_headers(req);
@@ -123,58 +132,57 @@ void server::handle_request(evhttp_request *req) {
 
     // only GET and HEAD requests allowed
     if (req->type != EVHTTP_REQ_GET && req->type != EVHTTP_REQ_HEAD) {
-        evhttp_send_error(req, HTTP_BADMETHOD, nullptr);
-        BOOST_LOG_TRIVIAL(debug) << "Job have done by thread: " << std::this_thread::get_id();
+        BOOST_LOG_TRIVIAL(info) << HTTP_BADMETHOD << ' ' << req->uri << std::endl;
+        evhttp_send_reply(req, HTTP_BADMETHOD, nullptr, nullptr);    
         return;
     }
-    // decoded uri
+    // decoded URI
     auto decoded_uri = evhttp_uri_parse(req->uri);
 	if (!decoded_uri) {
-		BOOST_LOG_TRIVIAL(error) << "It's not a good URI: " <<  req->uri;
-        BOOST_LOG_TRIVIAL(debug) << HTTP_BADREQUEST << std::endl;
-		evhttp_send_error(req, HTTP_BADREQUEST, nullptr);
+		BOOST_LOG_TRIVIAL(error) << "Bad URI: " <<  req->uri;
+        BOOST_LOG_TRIVIAL(info) << HTTP_BADREQUEST << ' ' << req->uri << std::endl;
+		evhttp_send_reply(req, HTTP_BADMETHOD, nullptr, nullptr);    
 		return;
 	}
-    
+    // path from URI
     auto path = evhttp_uri_get_path(decoded_uri);
 	if (!path) {
         path = "/";
         is_index = true;
     };
-
+    // decoded path
     auto decoded_path = evhttp_uridecode(path, 0, nullptr);
 	if (!decoded_path) {
-        BOOST_LOG_TRIVIAL(error) << "It's not a good path:" << path;
-        BOOST_LOG_TRIVIAL(debug) << HTTP_NOTFOUND << std::endl;
-        evhttp_send_error(req, HTTP_NOTFOUND, nullptr);
+        BOOST_LOG_TRIVIAL(error) << "Bad path:" << path;
+        BOOST_LOG_TRIVIAL(info) << HTTP_NOTFOUND << ' ' << req->uri << std::endl;
+        evhttp_send_reply(req, HTTP_NOTFOUND, nullptr, nullptr);   
         evhttp_uri_free(decoded_uri);
         return;
     } else {
         is_index = (decoded_path[strlen(decoded_path)-1] == '/');
     }
 
-	if (strstr(decoded_path, "..")) {
-        BOOST_LOG_TRIVIAL(error) << "It's not a good path: " << decoded_path;
-        BOOST_LOG_TRIVIAL(debug) << HTTP_NOTFOUND << std::endl;
-        evhttp_send_error(req, HTTP_NOTFOUND, nullptr);
+    if (!is_safe_path(decoded_path)) {
+        BOOST_LOG_TRIVIAL(error) << "Bad decoded path: " << decoded_path;
+        BOOST_LOG_TRIVIAL(info) << HTTP_NOTFOUND << ' ' << req->uri << std::endl;
+        evhttp_send_reply(req, HTTP_NOTFOUND, nullptr, nullptr);
         evhttp_uri_free(decoded_uri);
         free(decoded_path);
         return;
     }
 
-    BOOST_LOG_TRIVIAL(debug) << "path: " << decoded_path;
-
-    // logic with files...
     auto result = server::find_source(_document_root, decoded_path);
 
     auto out = evbuffer_new();
 
     if (result.first == -1) {
-        BOOST_LOG_TRIVIAL(debug) << "file not found" << decoded_path;
+        BOOST_LOG_TRIVIAL(debug) << "File not found: " << decoded_path;
         if (is_index) {
-            evhttp_send_error(req, HTTP::FORBIDDEN, nullptr);
+            BOOST_LOG_TRIVIAL(info) << HTTP::FORBIDDEN << ' ' << req->uri << std::endl;
+            evhttp_send_reply(req, HTTP::FORBIDDEN, nullptr, nullptr);
         } else {
-	        evhttp_send_error(req, HTTP_NOTFOUND, nullptr);
+            BOOST_LOG_TRIVIAL(info) << HTTP_NOTFOUND << ' ' << req->uri << std::endl;
+	        evhttp_send_reply(req, HTTP_NOTFOUND, nullptr, nullptr);
         }
     } else {
         if (req->type == EVHTTP_REQ_GET) {
@@ -184,15 +192,13 @@ void server::handle_request(evhttp_request *req) {
         auto content_type = get_content_type(decoded_path);
         BOOST_LOG_TRIVIAL(debug) << "Content-type: " <<  content_type;
         evhttp_add_header(out_headers, HTTP::HEADER::CONTENT_TYPE, content_type.c_str());
-        std::string l;
-        std::stringstream ss;
-        ss << result.second;
-        auto content_length = ss.str().c_str();
-        BOOST_LOG_TRIVIAL(debug) << "Content-Length: " << content_length;
-        evhttp_add_header(out_headers, HTTP::HEADER::CONTENT_LENGTH, ss.str().c_str());
 
-        BOOST_LOG_TRIVIAL(debug) << HTTP_OK << " OK " << decoded_path << std::endl;
-        evhttp_send_reply(req, HTTP_OK, "OK", out);    
+        auto content_length = std::to_string(result.second);
+        BOOST_LOG_TRIVIAL(debug) << "Content-length: " << content_length;
+        evhttp_add_header(out_headers, HTTP::HEADER::CONTENT_LENGTH, content_length.c_str());
+
+        BOOST_LOG_TRIVIAL(info) << HTTP_OK << ' ' << req->uri << std::endl;
+        evhttp_send_reply(req, HTTP_OK, "OK", out);
     }
     
 	if (decoded_uri)
@@ -201,7 +207,4 @@ void server::handle_request(evhttp_request *req) {
 		free(decoded_path);
     if (out)
 		evbuffer_free(out);
-
-    BOOST_LOG_TRIVIAL(info) << "Job have done by thread: "
-        << std::this_thread::get_id() << std::endl;
 }
