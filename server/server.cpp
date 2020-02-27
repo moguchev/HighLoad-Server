@@ -38,7 +38,7 @@ int server::run() {
         BOOST_LOG_TRIVIAL(error) << "Failed to init http server.";
         return EXIT_FAILURE;
     }
-
+    BOOST_LOG_TRIVIAL(info) << "Server run on: " << _address << ':' << _port;
     evhttp_set_gencb(Server.get(), on_request, &_thread_pool);
 
     if (event_dispatch() == -EXIT_FAILURE) {
