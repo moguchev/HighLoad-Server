@@ -56,6 +56,14 @@ docker run -p 80:80 -v /etc/httpd.conf:/etc/httpd.conf:ro -v /var/www/html:/var/
 ```
 
 ## Installation ##
+### With Docker
+```sh
+git clone https://github.com/moguchev/HighLoad-Server.git
+cd HighLoad-Server
+docker build . -t server
+docker run -p 80:80 -t server --name server
+```
+### With CMake
 ```sh
 git clone https://github.com/moguchev/HighLoad-Server.git
 cd HighLoad-Server
