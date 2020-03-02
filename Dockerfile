@@ -13,7 +13,7 @@ COPY . /server
 COPY ./httpd.conf /etc/httpd.conf
 #COPY ./httptest /var/www/html/httptest
 
-RUN cmake CMakeLists.txt
+RUN cmake .
 RUN make
 
 EXPOSE 80

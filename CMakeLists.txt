@@ -31,6 +31,7 @@ include_directories(SYSTEM ${Boost_INCLUDE_DIRS}
 set(SRC_LIST
     thread_pool/thread_pool.cpp
     server/server.cpp
+    config_parser/config_parser.cpp
     main.cpp
 )
 
