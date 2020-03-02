@@ -72,4 +72,4 @@ make
 ./Server
 ```
 ### Note
-Do not forget write your configurations in httpd.conf file.
+Do not forget write your configurations in *httpd.conf* file.
